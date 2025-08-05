@@ -97,6 +97,9 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      actions: read
 
     steps:
       - name: Checkout code
@@ -171,7 +174,9 @@ jobs:
         if: steps.version-check.outputs.version_changed == 'true'
         run: |
           npm run package
-          vsce package --no-dependencies
+          vsce package --no-dependencies --out ai-commit-generator-${{ steps.version-check.outputs.current_version }}.vsix
+          ls -la *.vsix
+          echo "VSIX file created: ai-commit-generator-${{ steps.version-check.outputs.current_version }}.vsix"
 
       - name: Publish to Visual Studio Marketplace
         if: steps.version-check.outputs.version_changed == 'true'
@@ -180,12 +185,18 @@ jobs:
         run: |
           vsce publish --pat $VSCE_PAT --no-dependencies
 
+      - name: Create Git Tag
+        if: steps.version-check.outputs.version_changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git tag v${{ steps.version-check.outputs.current_version }}
+          git push origin v${{ steps.version-check.outputs.current_version }}
+
       - name: Create GitHub Release
         if: steps.version-check.outputs.version_changed == 'true'
         id: create-release
         uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ steps.version-check.outputs.current_version }}
           name: Release v${{ steps.version-check.outputs.current_version }}
@@ -194,7 +205,7 @@ jobs:
 
             ### 📦 Installation
             - Install from [VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=DTDucas.ai-commit-generator)
-            - Or download the `.vsix` file from this release
+            - Or download the `.vsix` file from this release and install via `code --install-extension filename.vsix`
 
             ### 🔗 Links
             - [Repository](https://github.com/${{ github.repository }})
@@ -203,10 +214,17 @@ jobs:
 
             ### 📋 Changelog
             See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md#changelog) for detailed changes.
+
+            ### 🚀 Features
+            - 🤖 **Dual AI Support**: Google Gemini & AWS Bedrock
+            - ✨ **Smart Analysis**: Analyzes staged git changes
+            - 📝 **Strict Format**: Conventional commits with emojis
+            - 🎯 **VSCode Integration**: Source Control panel button
+            - ⚙️ **JSON Configuration**: Workspace-specific settings
           draft: false
           prerelease: false
           files: |
-            ./ai-commit-generator-${{ steps.version-check.outputs.current_version }}.vsix
+            ai-commit-generator-${{ steps.version-check.outputs.current_version }}.vsix
 
       - name: Send Discord notification - Success
         if: steps.version-check.outputs.version_changed == 'true' && success()
