@@ -42,44 +42,50 @@ jobs:
       - name: Package extension
         run: npm run package
 
-      - name: Send Discord notification - Test Started
+      - name: Send Discord notification - Test Results
         if: always()
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
           if [ -n "$DISCORD_WEBHOOK" ]; then
-            status="✅ Success"
-            color=65280
-            if [ "${{ job.status }}" != "success" ]; then
-              status="❌ Failed"
-              color=16711680
+            if [ "${{ job.status }}" = "success" ]; then
+              STATUS="✅ Success"
+              COLOR=65280
+            else
+              STATUS="❌ Failed"
+              COLOR=16711680
             fi
 
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "🧪 AI Commit Generator - Test Phase",
-                "description": "Testing extension build and compilation",
-                "color": '$color',
-                "fields": [
-                  {
-                    "name": "Status",
-                    "value": "'$status'",
-                    "inline": true
-                  },
-                  {
-                    "name": "Branch",
-                    "value": "'${{ github.ref_name }}'",
-                    "inline": true
-                  },
-                  {
-                    "name": "Commit",
-                    "value": "[`'${GITHUB_SHA:0:7}'`]('${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}')",
-                    "inline": true
-                  }
-                ],
-                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
-              }]
-            }' "$DISCORD_WEBHOOK"
+            COMMIT_SHORT="${{ github.sha }}"
+            COMMIT_SHORT="${COMMIT_SHORT:0:7}"
+
+            curl -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK" -d @- << EOF
+          {
+            "embeds": [{
+              "title": "🧪 AI Commit Generator - Test Phase",
+              "description": "Testing extension build and compilation",
+              "color": $COLOR,
+              "fields": [
+                {
+                  "name": "Status",
+                  "value": "$STATUS",
+                  "inline": true
+                },
+                {
+                  "name": "Branch",
+                  "value": "${{ github.ref_name }}",
+                  "inline": true
+                },
+                {
+                  "name": "Commit",
+                  "value": "[\`$COMMIT_SHORT\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})",
+                  "inline": true
+                }
+              ],
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+            }]
+          }
+          EOF
           fi
 
   publish:
@@ -127,26 +133,28 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
           if [ -n "$DISCORD_WEBHOOK" ]; then
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "⚠️ AI Commit Generator - Version Skipped",
-                "description": "No new version detected, skipping publish",
-                "color": 16776960,
-                "fields": [
-                  {
-                    "name": "Current Version",
-                    "value": "v'${{ steps.version-check.outputs.current_version }}'",
-                    "inline": true
-                  },
-                  {
-                    "name": "Status",
-                    "value": "Already published",
-                    "inline": true
-                  }
-                ],
-                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
-              }]
-            }' "$DISCORD_WEBHOOK"
+            curl -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK" -d @- << EOF
+          {
+            "embeds": [{
+              "title": "⚠️ AI Commit Generator - Version Skipped",
+              "description": "No new version detected, skipping publish",
+              "color": 16776960,
+              "fields": [
+                {
+                  "name": "Current Version",
+                  "value": "v${{ steps.version-check.outputs.current_version }}",
+                  "inline": true
+                },
+                {
+                  "name": "Status",
+                  "value": "Already published",
+                  "inline": true
+                }
+              ],
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+            }]
+          }
+          EOF
           fi
 
       - name: Package extension
@@ -165,12 +173,12 @@ jobs:
       - name: Create GitHub Release
         if: steps.version-check.outputs.version_changed == 'true'
         id: create-release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ steps.version-check.outputs.current_version }}
-          release_name: Release v${{ steps.version-check.outputs.current_version }}
+          name: Release v${{ steps.version-check.outputs.current_version }}
           body: |
             ## 🎉 AI Commit Generator v${{ steps.version-check.outputs.current_version }}
 
@@ -187,17 +195,8 @@ jobs:
             See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md#changelog) for detailed changes.
           draft: false
           prerelease: false
-
-      - name: Upload Release Asset
-        if: steps.version-check.outputs.version_changed == 'true'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ./ai-commit-generator-${{ steps.version-check.outputs.current_version }}.vsix
-          asset_name: ai-commit-generator-${{ steps.version-check.outputs.current_version }}.vsix
-          asset_content_type: application/zip
+          files: |
+            ./ai-commit-generator-${{ steps.version-check.outputs.current_version }}.vsix
 
       - name: Create Git Tag
         if: steps.version-check.outputs.version_changed == 'true'
@@ -213,34 +212,36 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
           if [ -n "$DISCORD_WEBHOOK" ]; then
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "🚀 AI Commit Generator - Published Successfully!",
-                "description": "New version has been published to VS Code Marketplace",
-                "color": 65280,
-                "fields": [
-                  {
-                    "name": "Version",
-                    "value": "v'${{ steps.version-check.outputs.current_version }}'",
-                    "inline": true
-                  },
-                  {
-                    "name": "Marketplace",
-                    "value": "[Install Extension](https://marketplace.visualstudio.com/items?itemName=DTDucas.ai-commit-generator)",
-                    "inline": true
-                  },
-                  {
-                    "name": "GitHub Release",
-                    "value": "[View Release]('${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.version-check.outputs.current_version }}')",
-                    "inline": true
-                  }
-                ],
-                "footer": {
-                  "text": "Deployed by '${{ github.actor }}'"
+            curl -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK" -d @- << EOF
+          {
+            "embeds": [{
+              "title": "🚀 AI Commit Generator - Published Successfully!",
+              "description": "New version has been published to VS Code Marketplace",
+              "color": 65280,
+              "fields": [
+                {
+                  "name": "Version",
+                  "value": "v${{ steps.version-check.outputs.current_version }}",
+                  "inline": true
                 },
-                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
-              }]
-            }' "$DISCORD_WEBHOOK"
+                {
+                  "name": "Marketplace",
+                  "value": "[Install Extension](https://marketplace.visualstudio.com/items?itemName=DTDucas.ai-commit-generator)",
+                  "inline": true
+                },
+                {
+                  "name": "GitHub Release",
+                  "value": "[View Release](${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.version-check.outputs.current_version }})",
+                  "inline": true
+                }
+              ],
+              "footer": {
+                "text": "Deployed by ${{ github.actor }}"
+              },
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+            }]
+          }
+          EOF
           fi
 
       - name: Send Discord notification - Failure
@@ -249,32 +250,34 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
           if [ -n "$DISCORD_WEBHOOK" ]; then
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "embeds": [{
-                "title": "❌ AI Commit Generator - Publish Failed",
-                "description": "Failed to publish extension to VS Code Marketplace",
-                "color": 16711680,
-                "fields": [
-                  {
-                    "name": "Version",
-                    "value": "v'${{ steps.version-check.outputs.current_version }}'",
-                    "inline": true
-                  },
-                  {
-                    "name": "Failed Step",
-                    "value": "Publish to Marketplace",
-                    "inline": true
-                  },
-                  {
-                    "name": "Logs",
-                    "value": "[View Logs]('${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}')",
-                    "inline": true
-                  }
-                ],
-                "footer": {
-                  "text": "Attempted by '${{ github.actor }}'"
+            curl -H "Content-Type: application/json" -X POST "$DISCORD_WEBHOOK" -d @- << EOF
+          {
+            "embeds": [{
+              "title": "❌ AI Commit Generator - Publish Failed",
+              "description": "Failed to publish extension to VS Code Marketplace",
+              "color": 16711680,
+              "fields": [
+                {
+                  "name": "Version",
+                  "value": "v${{ steps.version-check.outputs.current_version }}",
+                  "inline": true
                 },
-                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
-              }]
-            }' "$DISCORD_WEBHOOK"
+                {
+                  "name": "Failed Step",
+                  "value": "Publish to Marketplace",
+                  "inline": true
+                },
+                {
+                  "name": "Logs",
+                  "value": "[View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})",
+                  "inline": true
+                }
+              ],
+              "footer": {
+                "text": "Attempted by ${{ github.actor }}"
+              },
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+            }]
+          }
+          EOF
           fi
