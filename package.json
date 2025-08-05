@@ -2,7 +2,7 @@
   "name": "ai-commit-dtducas",
   "displayName": "AI Commit Generator - DTDucas",
   "description": "Generate commit messages using Gemini or AWS Bedrock API",
-  "version": "1.0.1",
+  "version": "1.0.1.1",
   "publisher": "DTDucas",
   "author": {
     "name": "Duong Tran Quang (DTDucas)",
