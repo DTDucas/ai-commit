@@ -183,7 +183,7 @@ Run the "Open AI Commit Config" command to create a configuration file.
 
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/DTDucas/ai-commit
 cd ai-commit-generator
 
 # Install dependencies
