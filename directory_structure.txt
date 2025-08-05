@@ -1,0 +1,41 @@
+ai-commit/
+│
+├── config/
+│   
+│   └── ai-commit.schema.json
+├── src/
+│   
+│   ├── commands/
+│   │   
+│   │   └── generate-commit.ts
+│   ├── services/
+│   │   
+│   │   ├── ai/
+│   │   │   
+│   │   │   ├── ai-factory.ts
+│   │   │   ├── ai-service.interface.ts
+│   │   │   ├── bedrock-service.ts
+│   │   │   └── gemini-service.ts
+│   │   ├── ai-factory.ts
+│   │   ├── commit-service.ts
+│   │   └── git-service.ts
+│   ├── types/
+│   │   
+│   │   └── index.ts
+│   ├── utils/
+│   │   
+│   │   ├── commit-formatter.ts
+│   │   ├── config-manager.ts
+│   │   ├── diff-analyzer.ts
+│   │   └── scm-integration.ts
+│   └── extension.ts
+├── .eslintrc.json
+├── .gitignore
+├── .vscodeignore
+├── LICENSE
+├── README.md
+├── directory_structure.txt
+├── package-lock.json
+├── package.json
+├── tsconfig.json
+└── webpack.config.js

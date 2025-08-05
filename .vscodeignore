@@ -1,0 +1,59 @@
+# Source files - exclude from packaged extension
+src/**
+tsconfig.json
+webpack.config.js
+
+# Development files
+.vscode/**
+.gitignore
+.eslintrc.json
+**/*.map
+*.vsix
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Test files
+test/**
+**/*.test.js
+**/*.test.ts
+
+# Build artifacts
+dist/
+
+# Documentation (keep README.md)
+docs/**
+*.md
+!README.md
+
+# Configuration files
+ai-commit.json
+.vscode/ai-commit.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+
+# Development dependencies
+package-lock.json
+
+# Coverage reports
+coverage/
+*.lcov
+
+# Logs
+logs/
+*.log
+
+# Directory structure file (development only)
+directory_structure.txt

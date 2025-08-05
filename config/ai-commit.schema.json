@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI Commit Configuration",
+  "description": "Configuration for AI Commit Generator extension",
+  "type": "object",
+  "properties": {
+    "provider": {
+      "type": "string",
+      "enum": ["gemini", "bedrock"],
+      "description": "AI provider to use for generating commit messages"
+    },
+    "apis": {
+      "type": "object",
+      "properties": {
+        "gemini": {
+          "type": "object",
+          "properties": {
+            "apiKey": {
+              "type": "string",
+              "description": "Google Gemini API key"
+            },
+            "model": {
+              "type": "string",
+              "default": "gemini-pro",
+              "description": "Gemini model to use"
+            }
+          },
+          "required": ["apiKey"]
+        },
+        "bedrock": {
+          "type": "object",
+          "properties": {
+            "region": {
+              "type": "string",
+              "description": "AWS region"
+            },
+            "accessKeyId": {
+              "type": "string",
+              "description": "AWS access key ID"
+            },
+            "secretAccessKey": {
+              "type": "string",
+              "description": "AWS secret access key"
+            },
+            "model": {
+              "type": "string",
+              "default": "anthropic.claude-3-sonnet-20240229-v1:0",
+              "description": "Bedrock model to use"
+            }
+          },
+          "required": ["region", "accessKeyId", "secretAccessKey"]
+        }
+      },
+      "required": ["gemini", "bedrock"]
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "autoFill": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically fill commit message in Source Control"
+        },
+        "showPreview": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show preview before filling commit message"
+        },
+        "maxRetries": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 3,
+          "description": "Maximum number of retry attempts"
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 5000,
+          "maximum": 120000,
+          "default": 30000,
+          "description": "Request timeout in milliseconds"
+        }
+      },
+      "required": ["autoFill", "showPreview", "maxRetries", "timeout"]
+    },
+    "customPrompt": {
+      "type": "string",
+      "description": "Additional custom instructions for AI"
+    }
+  },
+  "required": ["provider", "apis", "settings"]
+}

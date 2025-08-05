@@ -1,0 +1,131 @@
+name: Publish VSCode Extension
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.vscodeignore'
+      - 'LICENSE'
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint code
+        run: npm run lint
+
+      - name: Compile TypeScript
+        run: npm run compile
+
+      - name: Package extension
+        run: npm run package
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install VSCE
+        run: npm install -g vsce
+
+      - name: Check version changes
+        id: version-check
+        run: |
+          # Get the current version from package.json
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+          # Check if this version has been published
+          if git tag | grep -q "v$CURRENT_VERSION"; then
+            echo "version_changed=false" >> $GITHUB_OUTPUT
+            echo "Version $CURRENT_VERSION already exists"
+          else
+            echo "version_changed=true" >> $GITHUB_OUTPUT
+            echo "New version $CURRENT_VERSION detected"
+          fi
+
+      - name: Package extension
+        if: steps.version-check.outputs.version_changed == 'true'
+        run: |
+          npm run package
+          vsce package
+
+      - name: Publish to Visual Studio Marketplace
+        if: steps.version-check.outputs.version_changed == 'true'
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          vsce publish --pat $VSCE_PAT
+
+      - name: Create GitHub Release
+        if: steps.version-check.outputs.version_changed == 'true'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version-check.outputs.current_version }}
+          release_name: Release v${{ steps.version-check.outputs.current_version }}
+          body: |
+            ## Changes in v${{ steps.version-check.outputs.current_version }}
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/README.md#changelog) for details.
+
+            ### Installation
+            - Install from [VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=DTDucas.ai-commit-generator)
+            - Or download the `.vsix` file from this release
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        if: steps.version-check.outputs.version_changed == 'true'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: ./ai-commit-generator-${{ steps.version-check.outputs.current_version }}.vsix
+          asset_name: ai-commit-generator-${{ steps.version-check.outputs.current_version }}.vsix
+          asset_content_type: application/zip
+
+      - name: Create Git Tag
+        if: steps.version-check.outputs.version_changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git tag v${{ steps.version-check.outputs.current_version }}
+          git push origin v${{ steps.version-check.outputs.current_version }}
