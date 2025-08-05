@@ -28,8 +28,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Clean install dependencies
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
 
       - name: Lint code
         run: npm run lint
@@ -39,6 +41,46 @@ jobs:
 
       - name: Package extension
         run: npm run package
+
+      - name: Send Discord notification - Test Started
+        if: always()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            status="✅ Success"
+            color=65280
+            if [ "${{ job.status }}" != "success" ]; then
+              status="❌ Failed"
+              color=16711680
+            fi
+
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "embeds": [{
+                "title": "🧪 AI Commit Generator - Test Phase",
+                "description": "Testing extension build and compilation",
+                "color": '$color',
+                "fields": [
+                  {
+                    "name": "Status",
+                    "value": "'$status'",
+                    "inline": true
+                  },
+                  {
+                    "name": "Branch",
+                    "value": "'${{ github.ref_name }}'",
+                    "inline": true
+                  },
+                  {
+                    "name": "Commit",
+                    "value": "[`'${GITHUB_SHA:0:7}'`]('${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}')",
+                    "inline": true
+                  }
+                ],
+                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
+              }]
+            }' "$DISCORD_WEBHOOK"
+          fi
 
   publish:
     needs: test
@@ -57,8 +99,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Clean install dependencies
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install
 
       - name: Install VSCE
         run: npm install -g vsce
@@ -66,17 +110,43 @@ jobs:
       - name: Check version changes
         id: version-check
         run: |
-          # Get the current version from package.json
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
-          # Check if this version has been published
           if git tag | grep -q "v$CURRENT_VERSION"; then
             echo "version_changed=false" >> $GITHUB_OUTPUT
             echo "Version $CURRENT_VERSION already exists"
           else
             echo "version_changed=true" >> $GITHUB_OUTPUT
             echo "New version $CURRENT_VERSION detected"
+          fi
+
+      - name: Send Discord notification - Version Check
+        if: steps.version-check.outputs.version_changed == 'false'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "embeds": [{
+                "title": "⚠️ AI Commit Generator - Version Skipped",
+                "description": "No new version detected, skipping publish",
+                "color": 16776960,
+                "fields": [
+                  {
+                    "name": "Current Version",
+                    "value": "v'${{ steps.version-check.outputs.current_version }}'",
+                    "inline": true
+                  },
+                  {
+                    "name": "Status",
+                    "value": "Already published",
+                    "inline": true
+                  }
+                ],
+                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
+              }]
+            }' "$DISCORD_WEBHOOK"
           fi
 
       - name: Package extension
@@ -94,6 +164,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.version-check.outputs.version_changed == 'true'
+        id: create-release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -101,13 +172,19 @@ jobs:
           tag_name: v${{ steps.version-check.outputs.current_version }}
           release_name: Release v${{ steps.version-check.outputs.current_version }}
           body: |
-            ## Changes in v${{ steps.version-check.outputs.current_version }}
+            ## 🎉 AI Commit Generator v${{ steps.version-check.outputs.current_version }}
 
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/README.md#changelog) for details.
-
-            ### Installation
+            ### 📦 Installation
             - Install from [VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=DTDucas.ai-commit-generator)
             - Or download the `.vsix` file from this release
+
+            ### 🔗 Links
+            - [Repository](https://github.com/${{ github.repository }})
+            - [Documentation](https://github.com/${{ github.repository }}/blob/main/README.md)
+            - [Issues](https://github.com/${{ github.repository }}/issues)
+
+            ### 📋 Changelog
+            See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md#changelog) for detailed changes.
           draft: false
           prerelease: false
 
@@ -129,3 +206,75 @@ jobs:
           git config --local user.name "GitHub Action"
           git tag v${{ steps.version-check.outputs.current_version }}
           git push origin v${{ steps.version-check.outputs.current_version }}
+
+      - name: Send Discord notification - Success
+        if: steps.version-check.outputs.version_changed == 'true' && success()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "embeds": [{
+                "title": "🚀 AI Commit Generator - Published Successfully!",
+                "description": "New version has been published to VS Code Marketplace",
+                "color": 65280,
+                "fields": [
+                  {
+                    "name": "Version",
+                    "value": "v'${{ steps.version-check.outputs.current_version }}'",
+                    "inline": true
+                  },
+                  {
+                    "name": "Marketplace",
+                    "value": "[Install Extension](https://marketplace.visualstudio.com/items?itemName=DTDucas.ai-commit-generator)",
+                    "inline": true
+                  },
+                  {
+                    "name": "GitHub Release",
+                    "value": "[View Release]('${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.version-check.outputs.current_version }}')",
+                    "inline": true
+                  }
+                ],
+                "footer": {
+                  "text": "Deployed by '${{ github.actor }}'"
+                },
+                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
+              }]
+            }' "$DISCORD_WEBHOOK"
+          fi
+
+      - name: Send Discord notification - Failure
+        if: steps.version-check.outputs.version_changed == 'true' && failure()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "embeds": [{
+                "title": "❌ AI Commit Generator - Publish Failed",
+                "description": "Failed to publish extension to VS Code Marketplace",
+                "color": 16711680,
+                "fields": [
+                  {
+                    "name": "Version",
+                    "value": "v'${{ steps.version-check.outputs.current_version }}'",
+                    "inline": true
+                  },
+                  {
+                    "name": "Failed Step",
+                    "value": "Publish to Marketplace",
+                    "inline": true
+                  },
+                  {
+                    "name": "Logs",
+                    "value": "[View Logs]('${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}')",
+                    "inline": true
+                  }
+                ],
+                "footer": {
+                  "text": "Attempted by '${{ github.actor }}'"
+                },
+                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
+              }]
+            }' "$DISCORD_WEBHOOK"
+          fi
