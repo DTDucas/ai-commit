@@ -2,6 +2,9 @@
 
 Generate professional commit messages using AI (Google Gemini or AWS Bedrock) directly in VSCode.
 
+**Author**: [Duong Tran Quang (DTDucas)](https://github.com/DTDucas)
+**Contact**: [baymax.contact@gmail.com](mailto:baymax.contact@gmail.com)
+
 ## Features
 
 - 🤖 **Dual AI Support**: Choose between Google Gemini or AWS Bedrock
